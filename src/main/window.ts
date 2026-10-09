@@ -1,17 +1,39 @@
-import { BrowserWindow, screen } from 'electron'
+import { BrowserWindow, screen, type Display } from 'electron'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { IPC, type Point } from '../shared/ipc'
 import { APP_ORIGIN } from './protocol'
+import { getSave, patchSave } from './save'
 
 const CURSOR_INTERVAL_MS = 33
 const PAGES = process.env.ELECTRON_RENDERER_URL ?? APP_ORIGIN
 
-/** Transparent, click-through overlay covering the primary display's work area. */
+const petDisplay = (): Display => screen.getAllDisplays().find((d) => d.id === getSave().settings.displayId) ?? screen.getPrimaryDisplay()
+
+function setPetDisplay(win: BrowserWindow, display: Display): void {
+  const a = display.workArea
+  const b = win.getBounds()
+  if (a.x !== b.x || a.y !== b.y || a.width !== b.width || a.height !== b.height) win.setBounds(a)
+  if (getSave().settings.displayId !== display.id) patchSave({ settings: { displayId: display.id } })
+}
+
+/** Keep one overlay, moving it to the destination display only after the drag ends. */
+export function movePetToCursor(win: BrowserWindow): Point | null {
+  const cursor = screen.getCursorScreenPoint()
+  const display = screen.getDisplayNearestPoint(cursor)
+  const changed = display.id !== petDisplay().id
+  setPetDisplay(win, display)
+  if (!changed) return null
+  // Use the actual bounds: window managers may adjust the requested work area.
+  const b = win.getBounds()
+  return { x: cursor.x - b.x, y: cursor.y - b.y }
+}
+
+/** Transparent, click-through overlay covering one display's work area. */
 export function createPetWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    ...screen.getPrimaryDisplay().workArea,
+    ...petDisplay().workArea,
     show: false,
     frame: false,
     transparent: true,
@@ -32,10 +54,22 @@ export function createPetWindow(): BrowserWindow {
   // Linux window managers stack a focused full-screen window above it.
   win.setVisibleOnAllWorkspaces(true)
   win.setIgnoreMouseEvents(true)
+  const syncDisplay = (): void => setPetDisplay(win, petDisplay())
+  syncDisplay()
+  screen.on('display-added', syncDisplay)
+  screen.on('display-removed', syncDisplay)
+  screen.on('display-metrics-changed', syncDisplay)
+  win.on('closed', () => {
+    screen.removeListener('display-added', syncDisplay)
+    screen.removeListener('display-removed', syncDisplay)
+    screen.removeListener('display-metrics-changed', syncDisplay)
+  })
   // On macOS, dock.hide() turns the process into a UI element, which hides
   // windows that are already visible.
   win.once('ready-to-show', () => {
     win.showInactive()
+    // macOS can reposition a newly shown window; local pet coordinates require the work-area origin.
+    syncDisplay()
     if (process.platform === 'win32') hideOnFullscreen(win)
   })
   // The pet never navigates; links inside SWFs must not replace the page.

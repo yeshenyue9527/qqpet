@@ -83,6 +83,8 @@ export interface GameSaveDatas {
 
 /** Menu and settings panel options (kept in the original's localStorage). */
 export interface Settings {
+  /** Desktop display hosting the pet. Missing/disconnected displays fall back to the primary one. */
+  displayId?: number
   /** Pet, control bar and window opacity, 0..1. */
   opacity: number
   /** Desktop BGM (`pet/music/main01.mp3`) volume, 0..1. */

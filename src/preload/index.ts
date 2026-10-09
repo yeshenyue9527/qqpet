@@ -25,6 +25,7 @@ const api: QQPetApi = {
   setFocusable: send(IPC.setFocusable),
   setAutoStart: send(IPC.setAutoStart),
   setTrayState: send(IPC.setTrayState),
+  moveToCursor: () => ipcRenderer.invoke(IPC.moveToCursor),
   onCursor: (listener) => ipcRenderer.on(IPC.cursor, (_e, p) => listener(p)),
   onTrayClick: (listener) => ipcRenderer.on(IPC.trayClick, (_e, c) => listener(c)),
   onGamePlayed: (listener) => ipcRenderer.on(IPC.gamePlayed, (_e, m) => listener(m)),

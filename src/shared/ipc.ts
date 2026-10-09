@@ -23,6 +23,7 @@ export const IPC = {
   setFocusable: 'win:set-focusable',
   setAutoStart: 'app:set-auto-start',
   setTrayState: 'tray:set-state',
+  moveToCursor: 'win:move-to-cursor',
   cursor: 'win:cursor',
   trayClick: 'tray:click',
 } as const
@@ -48,9 +49,9 @@ export type TrayState =
   | 'dead'
   | 'bury'
 
-/** `state` opens the pet status panel, `menu` the pet's context menu. Window coordinates (the tray may lie outside it), absent on Linux. */
+/** Reuses the pet's UI actions. Optional coordinates are window-local; native menus need no anchor. */
 export interface TrayClick {
-  kind: 'state' | 'menu'
+  kind: 'state' | 'menu' | 'settings' | 'recover'
   x?: number
   y?: number
 }
@@ -129,6 +130,8 @@ export interface QQPetApi {
   setFocusable(enabled: boolean): void
   setAutoStart(enabled: boolean): void
   setTrayState(state: TrayState): void
+  /** Desktop drag release: move to the cursor's display; return its local position only when the display changed. */
+  moveToCursor?(): Promise<Point | null>
   /** Cursor position in window coordinates, pushed ~30 times per second. */
   onCursor(listener: (p: Point) => void): void
   onTrayClick(listener: (e: TrayClick) => void): void

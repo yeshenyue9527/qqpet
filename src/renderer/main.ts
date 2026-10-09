@@ -9,18 +9,21 @@ import './ui/face'
 import './ui/music'
 import { closeMenu, openMenu } from './ui/menu'
 import { openState } from './ui/state'
+import { homing, openSetup } from './ui/setup'
 
 const petEl = document.getElementById('pet')!
 const HOLD_MS = 500
 
 function clampOnScreen(): void {
   const s = petSize()
-  setInfo('lastX', Math.min(Math.max(info.lastX, 0), innerWidth - s))
-  setInfo('lastY', Math.min(Math.max(info.lastY, 0), innerHeight - s))
+  setInfo('lastX', Math.min(Math.max(Number.isFinite(info.lastX) ? info.lastX : 0, 0), Math.max(0, innerWidth - s)))
+  setInfo('lastY', Math.min(Math.max(Number.isFinite(info.lastY) ? info.lastY : 0, 0), Math.max(0, innerHeight - s)))
 }
 
 /** Left/right: keep the box on-screen. Hide_left/right already peek from the sprite edge. */
 function snapEdge(): 'hideleft' | 'hideright' | null {
+  // Clamp both axes before either edge branch returns.
+  clampOnScreen()
   const s = petSize()
   const near = 36
   if (info.lastX <= near) {
@@ -31,7 +34,6 @@ function snapEdge(): 'hideleft' | 'hideright' | null {
     setInfo('lastX', innerWidth - s)
     return 'hideright'
   }
-  clampOnScreen()
   return null
 }
 
@@ -54,6 +56,7 @@ if (info.lastX === -1 && info.lastY === -1) {
   setInfo('lastX', (innerWidth - size) / 2)
   setInfo('lastY', (innerHeight - size) / 2)
 }
+clampOnScreen()
 layout()
 onInfoChange((key) => {
   if (key === 'lastX' || key === 'lastY' || key === 'growth') layout()
@@ -69,6 +72,10 @@ window.API = {
 // element (or a drag is in progress).
 let interactive = false
 let dragging = false
+window.addEventListener('resize', () => {
+  layout()
+  if (!dragging) clampOnScreen()
+})
 window.qqpet.onCursor((p) => {
   cursor.x = p.x
   cursor.y = p.y
@@ -90,7 +97,7 @@ window.qqpet.onCursor((p) => {
 petEl.addEventListener('contextmenu', (e) => openMenu({ x: e.clientX, y: e.clientY, pet: true }, adoptPet))
 
 petEl.addEventListener('pointerdown', (e) => {
-  if (e.button !== 0 || (e.target as HTMLElement).classList.contains('point')) return
+  if (dragging || e.button !== 0 || (e.target as HTMLElement).classList.contains('point')) return
   closeMenu()
   showControl()
   dragging = true
@@ -100,6 +107,7 @@ petEl.addEventListener('pointerdown', (e) => {
   const hold = touch ? setTimeout(() => openMenu({ x: pageX(e), y: pageY(e), pet: true }, adoptPet), HOLD_MS) : 0
   let lifted = false
   const move = (m: PointerEvent): void => {
+    if (m.pointerId !== e.pointerId) return
     if (Math.hypot(m.clientX - e.clientX, m.clientY - e.clientY) > 8) {
       clearTimeout(hold)
       if (!lifted) {
@@ -116,21 +124,37 @@ petEl.addEventListener('pointerdown', (e) => {
     // Once lifted the scruff is the cursor; clamping the box would pull it off.
     if (!lifted) clampOnScreen()
   }
-  petEl.setPointerCapture(e.pointerId)
-  petEl.addEventListener('pointermove', move)
-  petEl.addEventListener(
-    'pointerup',
-    () => {
-      clearTimeout(hold)
+  const events = new AbortController()
+  const signal = { signal: events.signal }
+  const end = async (event: PointerEvent): Promise<void> => {
+    if (event.pointerId !== e.pointerId) return
+    events.abort()
+    clearTimeout(hold)
+    if (petEl.hasPointerCapture(e.pointerId)) petEl.releasePointerCapture(e.pointerId)
+    try {
+      if (event.type === 'pointerup' && lifted) {
+        const point = await window.qqpet.moveToCursor?.()
+        if (point) {
+          // Let the new display's viewport resize before measuring the pet.
+          await new Promise(requestAnimationFrame)
+          layout()
+          setInfo('lastX', point.x - size * 0.73)
+          setInfo('lastY', point.y - size * 0.14)
+        }
+      }
+    } catch (error) {
+      console.warn('Could not move pet to display:', error)
+    } finally {
       dragging = false
-      petEl.removeEventListener('pointermove', move)
       const edge = snapEdge()
       if (edge) machine.play({ a: edge })
       else if (lifted || machine.pose.a === 'hideleft' || machine.pose.a === 'hideright') machine.play({ a: 'normal' })
       scheduleHide()
-    },
-    { once: true },
-  )
+    }
+  }
+  petEl.addEventListener('pointermove', move, signal)
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) petEl.addEventListener(type, (event) => void end(event as PointerEvent), signal)
+  petEl.setPointerCapture(e.pointerId)
 })
 
 // Touch has no hover to show a tooltip by: a long press shows it, and the lift is not a tap.
@@ -188,7 +212,9 @@ const adoptPet = (): void => adopt(begin)
 window.qqpet.onTrayClick((c) => {
   const x = c.x ?? innerWidth - 60
   const y = c.y ?? 0
-  if (c.kind === 'menu') openMenu({ x, y, pet: false }, adoptPet)
+  if (c.kind === 'settings') openSetup()
+  else if (c.kind === 'recover') homing()
+  else if (c.kind === 'menu') openMenu({ x, y, pet: false }, adoptPet)
   else if (save.havePet) openState(x, y)
   else adoptPet()
 })

@@ -35,7 +35,7 @@ function setHd(on: boolean): void {
 document.body.classList.toggle('hd', save.settings.hd)
 
 /** Brings a lost pet back on screen. */
-function homing(): void {
+export function homing(): void {
   setInfo('lastX', 100)
   setInfo('lastY', innerHeight * 0.6)
   // On start: an interrupted hide ends, and hides the pet, right before.
