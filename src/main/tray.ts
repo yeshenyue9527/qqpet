@@ -17,12 +17,15 @@ function icon(sex: string, file: string, hd: boolean): NativeImage {
 export function createPetTray(onClick: (e: TrayClick) => void) {
   const tray = new Tray(icon('GG', 'leave.png', false))
   tray.setToolTip('QQ宠物')
-  // AppIndicator trays on Linux emit no click events; expose the same actions as a menu.
-  if (process.platform === 'linux') {
+  // Native menus remain usable even when the transparent pet window is hidden or on another display.
+  // macOS opens this menu on either mouse button; Linux AppIndicators require one.
+  if (process.platform === 'linux' || process.platform === 'darwin') {
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: '宠物状态', click: () => onClick({ kind: 'state' }) },
         { label: '菜单', click: () => onClick({ kind: 'menu' }) },
+        { label: '系统设置', click: () => onClick({ kind: 'settings' }) },
+        { label: '找回宠物', click: () => onClick({ kind: 'recover' }) },
         { type: 'separator' },
         { label: '退出', click: () => app.quit() },
       ]),

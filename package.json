@@ -9,6 +9,7 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
+    "test": "node --experimental-vm-modules --test tests/*.test.mjs",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.harmony.json",
     "import-assets": "node scripts/import-assets.mjs",

@@ -37,6 +37,10 @@ QQ 宠物跨平台复刻（Windows / macOS / Linux / Android / HarmonyOS），�
 
 存档位于 `userData/save.json`，导入时旧存档备份为 `save.json.bak`。
 
+桌面版跨屏拖动在松手时切换到目标显示器，并记住该显示器；显示器断开后回到主屏。启动及显示区域变化时会自动把宠物限制在屏幕内。
+
+macOS 和 Linux 的托盘使用系统菜单，可直接打开状态、设置、找回宠物或退出。macOS 左右键均可打开该菜单；在其他显示器操作菜单时，宠物窗口也会移到该屏。设置里的「宠物不见了？点我试试」同样可以找回宠物，不会清空存档。「实时监听播报剪切板」关闭时不读取剪贴板；重新开启后只播报后续变化。
+
 ### Android
 
 宠物以悬浮窗形式显示在桌面和其他应用上方，功能与桌面版一致，另有以下适配：
@@ -92,6 +96,7 @@ GitHub Actions 打 `v*` 标签时产出未签名 HAP 并放进 Release。和桌�
 ```bash
 git lfs install && git lfs pull   # resources/pet 由 Git LFS 管理
 npm ci
+npm test        # Node.js 22.18+，使用内置测试运行器
 npm run dev
 ```
 

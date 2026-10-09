@@ -8,7 +8,8 @@ import { handleScheme, registerScheme } from './protocol'
 import { exportSave, getSave, importSave, loadSave, patchSave, resetSave } from './save'
 import { createPetTray } from './tray'
 import { frontName } from './front'
-import { createPetWindow, openGameWindow } from './window'
+import { createClipboardWatcher } from './clipboard'
+import { createPetWindow, movePetToCursor, openGameWindow } from './window'
 
 if (!app.requestSingleInstanceLock()) app.exit(0)
 
@@ -25,19 +26,17 @@ app.whenReady().then(() => {
 
   const win = createPetWindow()
   const tray = createPetTray((click) => {
+    win.showInactive()
+    movePetToCursor(win)
+    win.moveTop()
     const b = win.getBounds()
     win.webContents.send(IPC.trayClick, click.x === undefined ? click : { ...click, x: click.x - b.x, y: click.y! - b.y })
   })
   app.on('before-quit', () => tray.destroy())
 
-  let copied = ''
-  void clipboard.readText().then((t) => (copied = t))
-  setInterval(async () => {
-    const text = await clipboard.readText()
-    if (text === copied) return
-    copied = text
-    if (text.trim() && getSave().settings.clip) win.webContents.send(IPC.clipboard, text)
-  }, 500)
+  const watchClipboard = createClipboardWatcher((text) => win.webContents.send(IPC.clipboard, text))
+  watchClipboard(getSave().settings.clip)
+  app.on('before-quit', () => watchClipboard(false))
 
   ipcMain.handle(IPC.load, () => getSave())
   ipcMain.on(IPC.save, (_e, patch: SavePatch) => {
@@ -45,6 +44,7 @@ app.whenReady().then(() => {
     if (patch.petInfo) tray.retip(getSave().petInfo)
     if (patch.settings?.hd !== undefined) tray.setState(getSave())
     if (patch.settings?.watchApp !== undefined) watchFront(getSave().settings.watchApp)
+    if (patch.settings?.clip !== undefined) watchClipboard(getSave().settings.clip)
   })
   ipcMain.on(IPC.resetPet, (_e, sex?: Sex) => {
     resetSave(sex)
@@ -90,6 +90,7 @@ app.whenReady().then(() => {
   ipcMain.on(IPC.setFocusable, (_e, on: boolean) => win.setFocusable(on))
   ipcMain.on(IPC.setAutoStart, (_e, on: boolean) => app.setLoginItemSettings({ openAtLogin: on }))
   ipcMain.on(IPC.setTrayState, (_e, state: TrayState) => tray.setState(getSave(), state))
+  ipcMain.handle(IPC.moveToCursor, () => movePetToCursor(win))
 
   const AWAY_S = 300
   let away = false
